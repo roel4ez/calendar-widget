@@ -62,6 +62,7 @@ Quick recolouring without editing CSS:
 | `accent`  | `--cal-accent`   |
 | `bg`      | `--cal-bg`       |
 | `fg`      | `--cal-fg`       |
+| `freeBg`  | `--cal-free-bg`  |
 | `busyBg`  | `--cal-busy-bg`  |
 | `busyFg`  | `--cal-busy-fg`  |
 | `border`  | `--cal-border`   |
