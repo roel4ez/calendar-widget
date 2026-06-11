@@ -22,6 +22,19 @@ body {
   background: var(--cal-bg);
   color: var(--cal-fg);
   font-family: var(--cal-font);
+  overflow: hidden;
+}
+
+/* Hide scrollbars across browsers (the widget should size to fit the iframe;
+   bump the iframe height if content is being clipped). */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+html,
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .cal {
