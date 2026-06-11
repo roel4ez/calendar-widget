@@ -338,6 +338,7 @@ function applyThemeOverrides(p) {
     border: "--cal-border",
     font: "--cal-font",
     headerFont: "--cal-header-font",
+    headerFg: "--cal-header-fg",
     radius: "--cal-radius",
   };
   const root = document.documentElement;

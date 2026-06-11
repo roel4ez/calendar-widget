@@ -68,6 +68,7 @@ Quick recolouring without editing CSS:
 | `border`  | `--cal-border`   |
 | `font`    | `--cal-font`     |
 | `headerFont` | `--cal-header-font` (month name + Today/prev/next) |
+| `headerFg`   | `--cal-header-fg` (month name + Today/prev/next text colour) |
 | `radius`  | `--cal-radius`   |
 
 Hex codes need URL-encoding (`#` → `%23`). Example:
