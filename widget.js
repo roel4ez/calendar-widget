@@ -4,7 +4,7 @@ const params = new URLSearchParams(location.search);
 
 const config = {
   ical: params.get("ical") || "",
-  proxy: params.get("proxy") ?? "https://api.codetabs.com/v1/proxy?quest=",
+  proxy: params.get("proxy") ?? "https://calendar-proxy.rfauconn.workers.dev/?url=",
   locale: params.get("locale") || navigator.language || "en-US",
   currency: params.get("currency") || "",
   weekStart: clampInt(params.get("weekStart"), 0, 6, 1), // 0=Sun, 1=Mon

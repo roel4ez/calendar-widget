@@ -51,7 +51,7 @@ parameters:
 | `title`      | current month name   | Header title override.                                           |
 | `legend`     | `true`               | Set `legend=false` to hide.                                      |
 | `showPast`   | `true`               | `showPast=false` hides days before today.                        |
-| `proxy`      | `https://api.codetabs.com/v1/proxy?quest=` | CORS proxy (see below). Empty string disables.    |
+| `proxy`      | `https://calendar-proxy.rfauconn.workers.dev/?url=` | CORS proxy (see below). Empty string disables.    |
 
 ### Theme overrides via URL
 
@@ -129,10 +129,14 @@ doesn't return a CORS header. The widget therefore routes the request
 through a tiny "proxy" — a server that fetches the iCal on your behalf
 and re-sends it with the right header.
 
-By default it uses the public proxy `api.codetabs.com`, which is fine
-for testing. For production you should host your own — public proxies
-disappear without warning. **Cloudflare Workers** is the easiest free
-option (no credit card, ~5 minutes to set up).
+The default proxy points at a private Cloudflare Worker
+(`calendar-proxy.rfauconn.workers.dev`) owned by this repo. If you fork
+this project you should deploy your own — see below — and override the
+default by either editing `widget.js` or passing `?proxy=...`.
+
+Public CORS proxies exist but tend to get rate-limited or blocked when
+hitting popular targets like Google Calendar, so a self-hosted Worker is
+strongly recommended for anything beyond a quick demo.
 
 ### Deploy your own Cloudflare Worker proxy
 
