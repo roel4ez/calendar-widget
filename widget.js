@@ -8,7 +8,7 @@ const config = {
   locale: params.get("locale") || navigator.language || "en-US",
   currency: params.get("currency") || "",
   weekStart: clampInt(params.get("weekStart"), 0, 6, 1), // 0=Sun, 1=Mon
-  months: clampInt(params.get("months"), 1, 24, 1),
+  months: clampInt(params.get("months"), 1, 24, 2),
   showLegend: params.get("legend") !== "false",
   showPast: params.get("showPast") !== "false",
   title: params.get("title") || "",
@@ -159,19 +159,24 @@ function render() {
     return;
   }
 
+  const months = document.createElement("div");
+  months.className = "cal__months";
+  if (config.months > 1) months.classList.add("cal__months--multi");
   for (let i = 0; i < config.months; i++) {
     const month = addMonths(state.cursor, i);
-    if (i > 0) {
+    const block = document.createElement("div");
+    block.className = "cal__month";
+    if (config.months > 1) {
       const sub = document.createElement("div");
       sub.className = "cal__title cal__title--sub";
-      sub.style.marginTop = "20px";
-      sub.style.marginBottom = "8px";
       sub.textContent = formatMonth(month);
-      root.appendChild(sub);
+      block.appendChild(sub);
     }
-    root.appendChild(renderWeekdays());
-    root.appendChild(renderMonthGrid(month));
+    block.appendChild(renderWeekdays());
+    block.appendChild(renderMonthGrid(month));
+    months.appendChild(block);
   }
+  root.appendChild(months);
 
   if (config.showLegend) root.appendChild(renderLegend());
 }

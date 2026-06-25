@@ -46,6 +46,25 @@ body {
   margin: 0 auto;
 }
 
+.cal__months {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.cal__months--multi {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.cal__month {
+  min-width: 0;
+}
+
+.cal__title--sub {
+  margin-bottom: 8px;
+}
+
 .cal *,
 .cal *::before,
 .cal *::after {
@@ -197,5 +216,8 @@ body {
   }
   .cal__price {
     font-size: 0.62rem;
+  }
+  .cal__months--multi {
+    grid-template-columns: 1fr;
   }
 }

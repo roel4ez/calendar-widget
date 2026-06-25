@@ -47,7 +47,7 @@ parameters:
 | `currency`   | —                    | ISO code, e.g. `EUR`. If set, prices are formatted as currency.  |
 | `locale`     | browser locale       | e.g. `nl-BE`, `en-US`. Affects month/weekday names and currency. |
 | `weekStart`  | `1` (Mon)            | `0` for Sunday.                                                  |
-| `months`     | `1`                  | Number of months to render in a stack (1–24).                    |
+| `months`     | `2`                  | Number of months to render in a stack (1–24). Pass `months=1` for a single-month view. |
 | `title`      | current month name   | Header title override.                                           |
 | `legend`     | `true`               | Set `legend=false` to hide.                                      |
 | `showPast`   | `true`               | `showPast=false` hides days before today.                        |
