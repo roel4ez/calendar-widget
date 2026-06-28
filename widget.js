@@ -1,4 +1,17 @@
-import ICAL from "https://esm.sh/ical.js@2.1.0";
+import {
+  fetchIcal,
+  classifyEvents,
+  applyThemeOverrides,
+  clampInt,
+  startOfMonth,
+  endOfMonth,
+  addMonths,
+  addDays,
+  stripTime,
+  sameDay,
+  dayKey,
+  formatPrice,
+} from "./calendar-data.js";
 
 const params = new URLSearchParams(location.search);
 
@@ -35,8 +48,8 @@ async function main() {
     return;
   }
   try {
-    const text = await fetchIcal(config.ical);
-    const { busy, prices } = classifyEvents(text);
+    const text = await fetchIcal(config.ical, config.proxy);
+    const { busy, prices } = classifyEvents(text, state.cursor, 12 + config.months, 12);
     state.busy = busy;
     state.prices = prices;
     state.loaded = true;
@@ -45,105 +58,6 @@ async function main() {
     state.error = "Could not load calendar";
   }
   render();
-}
-
-function fetchIcal(url) {
-  const target = config.proxy
-    ? normalizeProxy(config.proxy) + encodeURIComponent(url)
-    : url;
-  return fetch(target, { credentials: "omit" }).then((r) => {
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    return r.text();
-  });
-}
-
-function normalizeProxy(p) {
-  let s = p.trim();
-  if (!/^https?:\/\//i.test(s)) s = "https://" + s;
-  // Ensure it ends with a query separator so the encoded URL appends cleanly.
-  if (!/[?&=]$/.test(s)) s += s.includes("?") ? "&" : "/?";
-  return s;
-}
-
-function parseEvents(icsText) {
-  const jcal = ICAL.parse(icsText);
-  const comp = new ICAL.Component(jcal);
-  const vevents = comp.getAllSubcomponents("vevent");
-  return vevents.map((v) => new ICAL.Event(v));
-}
-
-function classifyEvents(icsText) {
-  const busy = new Set();
-  const prices = new Map();
-  const events = safeParse(icsText);
-  const rangeStart = addMonths(state.cursor, -12);
-  const rangeEnd = addMonths(state.cursor, 12 + config.months);
-  for (const ev of events) {
-    if (ev.status && ev.status.toUpperCase() === "CANCELLED") continue;
-    const summary = (ev.summary || "").trim();
-    const priceMatch = summary.match(/^free\b[^\d-]*([\d.,]+)/i);
-    const isFree = /^free\b/i.test(summary);
-    iterateOccurrences(ev, rangeStart, rangeEnd, (start, end) => {
-      forEachDay(start, end, (d) => {
-        const k = dayKey(d);
-        if (priceMatch) prices.set(k, priceMatch[1]);
-        else if (isFree) {
-          /* free with no price: leave neither busy nor priced */
-        } else busy.add(k);
-      });
-    });
-  }
-  return { busy, prices };
-}
-
-function safeParse(icsText) {
-  try {
-    return parseEvents(icsText);
-  } catch (e) {
-    console.warn("ical parse failed", e);
-    return [];
-  }
-}
-
-function iterateOccurrences(ev, rangeStart, rangeEnd, cb) {
-  const startDate = ev.startDate;
-  const endDate = ev.endDate;
-  if (!startDate) return;
-
-  if (ev.isRecurring()) {
-    const it = ev.iterator();
-    let next;
-    let guard = 0;
-    while ((next = it.next()) && guard++ < 2000) {
-      const occStart = next.toJSDate();
-      if (occStart > rangeEnd) break;
-      const details = ev.getOccurrenceDetails(next);
-      const occEnd = details.endDate.toJSDate();
-      if (occEnd < rangeStart) continue;
-      cb(occStart, occEnd, startDate.isDate);
-    }
-  } else {
-    const s = startDate.toJSDate();
-    const e = endDate ? endDate.toJSDate() : s;
-    if (e < rangeStart || s > rangeEnd) return;
-    cb(s, e, startDate.isDate);
-  }
-}
-
-function forEachDay(start, end, cb) {
-  // iCal DTEND is exclusive for all-day events; for timed events, count the
-  // end day only if the event extends past midnight on that day.
-  const s = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  let last;
-  if (sameDay(start, end)) {
-    last = s;
-  } else {
-    const endMid = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-    const endsAtMidnight =
-      end.getHours() === 0 && end.getMinutes() === 0 && end.getSeconds() === 0;
-    last = endsAtMidnight ? addDays(endMid, -1) : endMid;
-  }
-  for (let d = s; d <= last; d = addDays(d, 1)) cb(d);
 }
 
 function render() {
@@ -215,8 +129,7 @@ function renderWeekdays() {
   const row = document.createElement("div");
   row.className = "cal__weekdays";
   const fmt = new Intl.DateTimeFormat(config.locale, { weekday: "short" });
-  // Reference Sunday: 2024-01-07 was a Sunday.
-  const ref = new Date(2024, 0, 7);
+  const ref = new Date(2024, 0, 7); // Sunday
   for (let i = 0; i < 7; i++) {
     const d = addDays(ref, (config.weekStart + i) % 7);
     const cell = document.createElement("div");
@@ -274,7 +187,7 @@ function renderMonthGrid(monthDate) {
     if (!isBusy && state.prices.has(key)) {
       const p = document.createElement("div");
       p.className = "cal__price";
-      p.textContent = formatPrice(state.prices.get(key));
+      p.textContent = formatPrice(state.prices.get(key), config.locale, config.currency);
       cell.appendChild(p);
     }
 
@@ -309,81 +222,9 @@ function btn(label, onClick) {
   return b;
 }
 
-function formatPrice(raw) {
-  const num = Number(String(raw).replace(/[^\d.,-]/g, "").replace(",", "."));
-  if (config.currency && Number.isFinite(num) && num > 0) {
-    try {
-      return new Intl.NumberFormat(config.locale, {
-        style: "currency",
-        currency: config.currency,
-        maximumFractionDigits: 0,
-      }).format(num);
-    } catch {
-      /* fall through */
-    }
-  }
-  return raw;
-}
-
 function formatMonth(d) {
   return new Intl.DateTimeFormat(config.locale, {
     month: "long",
     year: "numeric",
   }).format(d);
-}
-
-function applyThemeOverrides(p) {
-  const map = {
-    accent: "--cal-accent",
-    bg: "--cal-bg",
-    fg: "--cal-fg",
-    freeBg: "--cal-free-bg",
-    busyBg: "--cal-busy-bg",
-    busyFg: "--cal-busy-fg",
-    border: "--cal-border",
-    font: "--cal-font",
-    headerFont: "--cal-header-font",
-    headerFg: "--cal-header-fg",
-    radius: "--cal-radius",
-  };
-  const root = document.documentElement;
-  for (const [k, v] of Object.entries(map)) {
-    const val = p.get(k);
-    if (val) root.style.setProperty(v, val);
-  }
-}
-
-function clampInt(v, min, max, dflt) {
-  const n = parseInt(v ?? "", 10);
-  if (!Number.isFinite(n)) return dflt;
-  return Math.max(min, Math.min(max, n));
-}
-
-function startOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-function endOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
-}
-function addMonths(d, n) {
-  return new Date(d.getFullYear(), d.getMonth() + n, 1);
-}
-function addDays(d, n) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-}
-function stripTime(d) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-function sameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-function dayKey(d) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-function pad(n) {
-  return String(n).padStart(2, "0");
 }

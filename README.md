@@ -5,6 +5,13 @@ prices from a single iCal feed (e.g. a Google Calendar). Designed to be
 embedded in a Wix page via `<iframe>` and hosted for free on GitHub
 Pages.
 
+This repo ships two widgets that share the same iCal parsing / theme:
+
+- `index.html` — **read-only calendar** (free/busy + prices).
+- `form.html` — **booking request form** with range selection, extras,
+  total breakdown and a Cloudflare Worker that emails the host and the
+  guest.
+
 - **Zero build step.** Static HTML + ESM imports from a CDN.
 - **Minimal default theme**, fully overridable through CSS variables or a
   custom `theme.css`.
@@ -197,10 +204,118 @@ python3 -m http.server 8000
 
 ## Files
 
-- `index.html` — page shell
-- `widget.js`  — calendar logic (vanilla JS, ical.js from esm.sh)
+- `index.html` — calendar page shell
+- `form.html`  — booking form page shell
+- `widget.js`  — calendar logic (vanilla JS)
+- `booking-form.js` — booking form logic (range select, extras, totals, submit)
+- `calendar-data.js` — shared iCal fetch + parse + date helpers
+- `i18n.js`    — translations (en/nl/fr/de)
 - `theme.css`  — styles + CSS variables (edit freely)
+- `extras.json` — optional extras list (see Booking form section)
+- `worker/booking-handler.js` — Cloudflare Worker for the form submission
+- `worker/README.md` — Worker deploy + secrets reference
 - `.github/workflows/pages.yml` — GitHub Pages deploy
+
+## Booking form
+
+`form.html` adds a range-selecting booking form on top of the calendar.
+On desktop the month grid **is** the picker; on mobile (`max-width:
+mobileBreakpoint`) it switches to native `<input type="date">` pickers.
+
+```html
+<iframe
+  src="https://YOUR.github.io/calendar-widget/form.html?ical=...&currency=EUR&endpoint=https%3A%2F%2Fbooking-handler.YOURNAME.workers.dev"
+  width="100%"
+  height="980"
+  style="border:0"
+  loading="lazy"
+></iframe>
+```
+
+> Hint: the form posts a `window.parent.postMessage({type:"booking-widget:resize", height})`
+> message every time it re-renders, so the host page can size the iframe
+> automatically.
+
+### Booking-form URL parameters
+
+In addition to all the calendar params above:
+
+| Param              | Default | Notes                                                                  |
+| ------------------ | ------- | ---------------------------------------------------------------------- |
+| `endpoint`         | _(required for submit)_ | URL of the `booking-handler` Worker.                           |
+| `minStay`          | `1`     | Minimum nights per booking.                                            |
+| `maxStay`          | `30`    | Maximum nights per booking.                                            |
+| `leadTime`         | `1`     | Min days between today and check-in.                                   |
+| `checkInDay`       | —       | Restrict check-in weekdays, e.g. `5,6` = Fri/Sat (0=Sun…6=Sat).        |
+| `extras`           | —       | Inline list **or** URL of an `extras.json`. See below.                 |
+| `maxGuests`        | `10`    | Max value in the Guests dropdown.                                      |
+| `mobileBreakpoint` | `600`   | Width (px) below which native date pickers are used.                   |
+| `lang`             | auto    | `en`, `nl`, `fr`, `de`. Falls back to browser language, then English.  |
+
+### Extras
+
+Two ways to configure extras:
+
+**Inline (URL param)** — quickest for 1–3 extras:
+
+```
+&extras=whirlpool:Whirlpool:50:flat,cleaning:Cleaning%20fee:75:flat,linen:Bed%20linen:12:perGuest
+```
+
+Format: `key:Label:price:scale` per extra, comma-separated. `scale` is
+`flat`, `perNight`, or `perGuest`. URL-encode spaces (`%20`).
+
+**JSON file** — better for longer lists or per-period prices:
+
+```json
+[
+  { "key": "whirlpool", "label": "Whirlpool", "price": 50, "scale": "flat" },
+  { "key": "cleaning",  "label": "Cleaning fee", "price": 75, "scale": "flat" },
+  { "key": "linen",     "label": "Bed linen", "price": 12, "scale": "perGuest" }
+]
+```
+
+Drop it next to `form.html` (e.g. `extras.json`) and reference it:
+`&extras=extras.json`.
+
+### Per-day minimum stay
+
+Encode per-period rules in the iCal title:
+
+```
+SUMMARY:FREE: 200 min7      ← available at 200/night, 7-night minimum
+DTSTART;VALUE=DATE:20260701
+DTEND;VALUE=DATE:20260901
+```
+
+The widget parses `min<N>` and enforces the maximum of any `min<N>` rule
+inside the selected range against the global `minStay`.
+
+### Submission flow
+
+The form POSTs JSON to the `endpoint` Worker. The Worker:
+
+1. Validates the payload server-side.
+2. Re-fetches the iCal and re-checks availability (race-condition defence).
+3. Sends two emails via Resend — one to the host with the full breakdown,
+   one to the guest as an auto-reply (Reply-To = host).
+
+Deploying the Worker, including all the required secrets, is documented
+in [`worker/README.md`](./worker/README.md).
+
+### Languages
+
+The form supports English, Dutch, French and German out of the box. A
+language switcher is rendered in the header; the initial language is
+picked from `?lang=`, then the browser's `navigator.language`, then
+English. Add more languages by extending `i18n.js`.
+
+### Spam protection
+
+The form includes a honeypot field and a render-time check (submissions
+under 2 seconds are rejected). The Worker rate-limits to 1 request per
+minute per IP. For higher-traffic sites consider adding Cloudflare
+Turnstile in front.
 
 ## License
 
